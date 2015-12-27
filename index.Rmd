@@ -1,0 +1,137 @@
+---
+title: "Practical Machine Learning Project"
+author: "Dongsoo Kang"
+date: "December 26, 2015"
+output: html_document
+---
+
+##Practical Machine Learning Course Project Write Up 
+
+###Contents
+1. Project Background
+2. Data Processing 
+3. Model Analysis 
+4. Model Validation
+
+###1. Project Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+The goal of this project is to predict the manner in which the participants did the exercise.
+
+
+###2. Data Processing
+
+####Loading Libraries
+
+```{r}
+library(caret)
+library(randomForest)
+```
+
+The training and test dataset are the following:
+
+```{r}
+trainingURL = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+testingURL = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+```
+
+####Loading and Partioning Dataset
+
+Loading the datasets.
+
+``` {r}
+#load datasets
+training = read.csv(url(trainingURL), na.strings = c("NA", "DIV/0!", ""))
+testing = read.csv(url(testingURL), na.strings = c("NA", "DIV/0!",""))
+
+dim(training); dim(testing)
+```
+
+####Data Cleansing
+
+Excluding the dependent variable, there are currently 159 variables, some of them containing lots of missing values. We want to exclude variables that have lots of missing values.
+
+```{r}
+has_na = sapply(training, function(x){sum(is.na(x))})
+table(has_na)
+```
+
+There are 100 variables that have 19216 missing values. Lets remove these variables! 
+
+``` {r}
+remove_cols = names(has_na[has_na == 19216])
+training2 = training[,!names(training) %in% remove_cols]
+
+#do the same thing for test dataset
+testing2 = testing[,!names(testing) %in% remove_cols]
+
+dim(training2); dim(testing2)
+```
+
+We were able to reduce the number of variables from 160 to 60. We are going to further reduce the number of columns by only including the depedent variable and columns that contains the following words: **"belt","arm", "forearm", and "dumbbell"**.
+
+``` {r}
+training3 = training2[,grep("arm|belt|dumbbell|forearm|classe", names(training2), value=TRUE)]
+testing3 = testing2[,grep("arm|belt|dumbbell|forearm", names(testing2), value=TRUE)]
+
+dim(training3); dim(testing3)
+
+names(training3); names(testing3)
+```
+
+We were able to further reduce the number of indepedent variables from 59 to 52 variables. Furthermore, with the exception of the **"classe"** variable, the training and testing sets contain the same columns.
+
+Now, we are going partition the dataset so 70% of the training set will be used to train our model, and the remaining 30% will be used for testing. 
+
+```{r}
+#partitioning dataset
+set.seed(33324)
+inTrain = createDataPartition(training3$classe, p=0.7, list= FALSE)
+myTrain <- training3[inTrain,]
+myTest <- training3[-inTrain,]
+
+#check dimension of myTrain and myTest
+dim(myTrain); dim(myTest)
+```
+
+###3. Model Analysis
+For this project, I used random forests as my prediction algorithm.
+
+``` {r}
+modFit <- randomForest(classe ~ ., data=myTrain)
+predictMod <- predict(modFit, myTest, type = "class")
+
+confusionMatrix(predictMod, myTest$classe)
+```
+
+###4. Model Validation
+According to the confusion matrix, the random forest algorithm had a 99.78% accuracy, in other word, the in sample error is 0.22%.
+
+#### Out of sample Error
+
+Predicting the test set
+```{r}
+predictTest <- predict(modFit, newdata = testing, type = "class")
+```
+
+Here are the predictions:
+```{r}
+predictTest
+```
+
+Generating Files:
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictTest)
+```
+
+After validating the test dataset ("pml-testing.csv"), the algorithm predicted all 20 cases correctly.
+
